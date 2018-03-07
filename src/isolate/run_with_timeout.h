@@ -32,7 +32,7 @@ v8::Local<v8::Value> RunWithTimeout(uint32_t timeout_ms, F&& fn) {
 				// This loop always terminates for me in 1 iteration but it goes up to 100 because the
 				// only other option is terminating the application if an isolate has gone out of
 				// control.
-				for (int ii = 0; ii < 100; ++ii) {
+				for (int ii = 0; ii < 2000; ++ii) {
 					std::this_thread::sleep_for(std::chrono::duration<int, std::milli>(2));
 					if (did_finish) {
 						return;
