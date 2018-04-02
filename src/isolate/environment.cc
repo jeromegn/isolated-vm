@@ -19,6 +19,7 @@ thread_local IsolateEnvironment* IsolateEnvironment::Executor::current_env = nul
 std::thread::id IsolateEnvironment::Executor::default_thread;
 thread_local IsolateEnvironment::Executor::Lock* IsolateEnvironment::Executor::Lock::current = nullptr;
 thread_local IsolateEnvironment::Executor::CpuTimer* IsolateEnvironment::Executor::cpu_timer_thread = nullptr;
+std::mutex uv_mutex;
 
 IsolateEnvironment::Executor::Lock::Lock(
 	IsolateEnvironment& env
@@ -161,6 +162,7 @@ void IsolateEnvironment::Scheduler::AsyncCallbackPool(bool pool_thread, void* pa
 	// (for instance calling Promise#reject). This all needs to happen *before* the uv_unref stuff
 	// below because otherwise we can end up in a situation where node thinks all work is done but
 	// isolated-vm is still finishing up.
+	std::lock_guard<std::mutex> lock(uv_mutex);
 	if (--uv_ref_count == 0) {
 		// Is there a possibility of a race condition here? What happens if uv_ref() below and this
 		// execute at the same time. I don't think that's possible because if uv_ref_count is 0 that means
@@ -222,6 +224,7 @@ std::queue<unique_ptr<Runnable>> IsolateEnvironment::Scheduler::Lock::TakeSyncIn
 }
 
 bool IsolateEnvironment::Scheduler::Lock::WakeIsolate(shared_ptr<IsolateEnvironment> isolate_ptr) {
+	std::lock_guard<std::mutex> lock(uv_mutex);
 	if (scheduler.status == Status::Waiting) {
 		scheduler.status = Status::Running;
 		IsolateEnvironment& isolate = *isolate_ptr;
