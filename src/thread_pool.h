@@ -37,20 +37,26 @@ class thread_pool_t {
 			thread_data.emplace_back();
 			size_t ii = thread_data.size() - 1;
 			threads.emplace_back(std::thread([ this, ii ]() {
+				printf("isolated-vm: thread %zu is alive\n", ii);
 				std::unique_lock<std::mutex> lock(mutex);
 				while (!thread_data[ii].should_exit) {
 					if (thread_data[ii].entry == nullptr) {
+						printf("isolated-vm: thread %zu is sleeping\n", ii);
 						thread_data[ii].cv->wait(lock);
+						printf("isolated-vm: thread %zu is awake\n", ii);
 					} else {
 						entry_t* entry = thread_data[ii].entry;
 						void* param = thread_data[ii].param;
 						lock.unlock();
+						printf("isolated-vm: thread %zu is running %p\n", ii, param);
 						entry(true, param);
 						lock.lock();
+						printf("isolated-vm: thread %zu finished running %p (%p)\n", ii, param, thread_data[ii].param);
 						thread_data[ii].entry = nullptr;
 						thread_data[ii].param = nullptr;
 					}
 				}
+				printf("isolated-vm: thread %zu is shutting down\n", ii);
 			}));
 			return ii;
 		}
@@ -105,6 +111,7 @@ class thread_pool_t {
 
 					if (thread == -1) {
 						// All threads are busy and pool is full, just run this in a new thread
+						printf("isolated-vm: running %p in tmp thread\n", param);
 						std::thread tmp_thread(std::bind(entry, false, param));
 						tmp_thread.detach();
 						return;
@@ -115,9 +122,11 @@ class thread_pool_t {
 			thread_data[thread].entry = entry;
 			thread_data[thread].param = param;
 			thread_data[thread].cv->notify_one();
+			printf("isolated-vm: thread %d will run %p\n", thread, param);
 		}
 
 		void resize(size_t size) {
+			printf("isolated-vm: resize %zu\n", size);
 			std::unique_lock<std::mutex> lock(this->mutex);
 			desired_size = size;
 			if (thread_data.size() > desired_size) {
