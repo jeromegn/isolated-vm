@@ -196,6 +196,7 @@ class IsolateEnvironment {
 
 			private:
 				static uv_async_t root_async;
+				static uv_idle_t root_uv_idle;
 				static thread_pool_t thread_pool;
 				static std::atomic<unsigned int> uv_ref_count;
 				Status status = Status::Waiting;
@@ -218,7 +219,7 @@ class IsolateEnvironment {
 				static void Init();
 
 			private:
-				static void AsyncCallbackRoot(uv_async_t* async);
+				static void AsyncCallbackRoot(uv_idle_t* /* idle */);
 				static void AsyncCallbackPool(bool pool_thread, void* param);
 				static void AsyncCallbackInterrupt(v8::Isolate* isolate_ptr, void* env_ptr);
 				static void SyncCallbackInterrupt(v8::Isolate* isolate_ptr, void* env_ptr);

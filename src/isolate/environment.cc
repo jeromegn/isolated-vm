@@ -129,6 +129,7 @@ IsolateEnvironment::Executor::Scope::~Scope() {
  * Scheduler implementation
  */
 uv_async_t IsolateEnvironment::Scheduler::root_async;
+uv_idle_t IsolateEnvironment::Scheduler::root_uv_idle;
 thread_pool_t IsolateEnvironment::Scheduler::thread_pool(std::thread::hardware_concurrency() + 1);
 std::atomic<unsigned int> IsolateEnvironment::Scheduler::uv_ref_count(0);
 
@@ -136,18 +137,17 @@ IsolateEnvironment::Scheduler::Scheduler() = default;
 IsolateEnvironment::Scheduler::~Scheduler() = default;
 
 void IsolateEnvironment::Scheduler::Init() {
-	uv_async_init(uv_default_loop(), &root_async, AsyncCallbackRoot);
+	uv_loop_t* loop = uv_default_loop();
+	uv_idle_init(loop, &root_uv_idle);
+	uv_async_init(loop, &root_async, nullptr);
 	root_async.data = nullptr;
 	uv_unref(reinterpret_cast<uv_handle_t*>(&root_async));
 }
 
-void IsolateEnvironment::Scheduler::AsyncCallbackRoot(uv_async_t* async) {
-	if (async->data == nullptr) {
-		// This is the final message
-		return;
-	}
-	void* data = async->data;
-	async->data = nullptr;
+void IsolateEnvironment::Scheduler::AsyncCallbackRoot(uv_idle_t* /* idle */) {
+	void* data = root_async.data;
+	root_async.data = nullptr;
+	uv_idle_stop(&root_uv_idle);
 	AsyncCallbackPool(true, data);
 }
 
@@ -241,6 +241,7 @@ bool IsolateEnvironment::Scheduler::Lock::WakeIsolate(shared_ptr<IsolateEnvironm
 		if (isolate.root) {
 			assert(root_async.data == nullptr);
 			root_async.data = isolate_ptr_ptr;
+			uv_idle_start(&root_uv_idle, IsolateEnvironment::Scheduler::AsyncCallbackRoot);
 			uv_async_send(&root_async);
 		} else {
 			thread_pool.exec(scheduler.thread_affinity, Scheduler::AsyncCallbackPool, isolate_ptr_ptr);
